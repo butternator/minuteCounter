@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindful Minutes: Meditation Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF8;
+            color: #3f3c3a;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 250px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .calendar-day.empty {
+            background-color: transparent;
+            pointer-events: none;
+        }
+        .calendar-day.today {
+            border: 2px solid #818cf8;
+        }
+         .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">Off time tracker</h1>
+            <p class="text-lg text-gray-500 mt-2">Time out off the line</p>
+        </header>
+
+        <main>
+            <section id="dashboard" class="mb-8">
+                <div class="text-center mb-4">
+                     <p class="text-gray-600">This dashboard provides a real-time summary of your meditation practice. As you log your minutes in the calendar below, these key statistics will update instantly, giving you a clear picture of your progress and consistency.</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-center">
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-500">Total Minutes</h3>
+                        <p id="total-minutes" class="text-4xl font-bold text-indigo-500 mt-2">0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-500">Daily Average</h3>
+                        <p id="daily-average" class="text-4xl font-bold text-indigo-500 mt-2">0.0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-500">Current Streak</h3>
+                        <p id="current-streak" class="text-4xl font-bold text-indigo-500 mt-2">0 days</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-500">25-25 Total</h3>
+                        <p id="total-minutes-25-25" class="text-4xl font-bold text-indigo-500 mt-2">0</p>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="calendar-section" class="bg-white p-6 rounded-xl shadow-md border border-gray-200 mb-8">
+                 <div class="text-center mb-4">
+                     <p class="text-gray-600">Use the calendar below to log your daily meditation sessions. Simply click on a day to enter the number of minutes you meditated. Your entries are saved automatically and will be reflected across the dashboard and chart.</p>
+                </div>
+                <div class="flex justify-center items-center mb-4 gap-4">
+                    <select id="month-select" class="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                    <select id="year-select" class="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                </div>
+
+                <div id="calendar-grid" class="grid grid-cols-7 gap-2"></div>
+            </section>
+
+            <section id="chart-section" class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                 <div class="text-center mb-4">
+                     <p class="text-gray-600">This chart visualizes your meditation minutes for the selected month. It helps you identify patterns in your practice, such as which days you meditate most. The chart updates in real-time as you log new entries in the calendar.</p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="meditation-chart"></canvas>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="input-modal" class="modal-backdrop hidden">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm">
+            <h3 id="modal-title" class="text-2xl font-bold mb-4 text-center">Enter Minutes</h3>
+            <input type="number" id="minutes-input" class="w-full p-3 border border-gray-300 rounded-lg text-center text-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="0">
+            <div class="flex gap-4 mt-6">
+                 <button id="save-button" class="w-full bg-indigo-500 text-white py-3 rounded-lg font-semibold hover:bg-indigo-600 transition-colors">Save</button>
+                 <button id="cancel-button" class="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const monthSelect = document.getElementById('month-select');
+            const yearSelect = document.getElementById('year-select');
+            const calendarGrid = document.getElementById('calendar-grid');
+            const totalMinutesEl = document.getElementById('total-minutes');
+            const dailyAverageEl = document.getElementById('daily-average');
+            const currentStreakEl = document.getElementById('current-streak');
+            const totalMinutes2525El = document.getElementById('total-minutes-25-25');
+            const modal = document.getElementById('input-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const minutesInput = document.getElementById('minutes-input');
+            const saveButton = document.getElementById('save-button');
+            const cancelButton = document.getElementById('cancel-button');
+
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            
+            let meditationData = {};
+            let selectedDateKey = '';
+            let chartInstance = null;
+            
+            function initialize() {
+                loadData();
+                const today = new Date();
+                populateYearSelect(today.getFullYear());
+                populateMonthSelect(today.getMonth());
+                
+                yearSelect.value = today.getFullYear();
+                monthSelect.value = today.getMonth();
+
+                render();
+                
+                monthSelect.addEventListener('change', render);
+                yearSelect.addEventListener('change', render);
+                
+                saveButton.addEventListener('click', handleSave);
+                cancelButton.addEventListener('click', hideModal);
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        hideModal();
+                    }
+                });
+                minutesInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        handleSave();
+                    }
+                });
+            }
+
+            function render() {
+                const year = parseInt(yearSelect.value);
+                const month = parseInt(monthSelect.value);
+                renderCalendar(year, month);
+                updateDashboard(year, month);
+                renderChart(year, month);
+            }
+            
+            function populateYearSelect(currentYear) {
+                for (let i = currentYear - 5; i <= currentYear + 5; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = i;
+                    yearSelect.appendChild(option);
+                }
+            }
+            
+            function populateMonthSelect(currentMonth) {
+                monthNames.forEach((name, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = name;
+                    monthSelect.appendChild(option);
+                });
+            }
+
+            function renderCalendar(year, month) {
+                calendarGrid.innerHTML = '';
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                dayHeaders.forEach(day => {
+                    const dayEl = document.createElement('div');
+                    dayEl.className = 'text-center font-semibold text-gray-500 text-sm';
+                    dayEl.textContent = day;
+                    calendarGrid.appendChild(dayEl);
+                });
+
+                const firstDayOfMonth = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+                for (let i = 0; i < firstDayOfMonth; i++) {
+                    const emptyCell = document.createElement('div');
+                    emptyCell.className = 'calendar-day empty';
+                    calendarGrid.appendChild(emptyCell);
+                }
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(year, month, day);
+                    const dateKey = date.toISOString().split('T')[0];
+                    const minutes = meditationData[dateKey] || 0;
+
+                    const dayCell = document.createElement('div');
+                    dayCell.className = 'calendar-day p-2 border rounded-lg text-center cursor-pointer transition-colors';
+                    if (minutes > 0) {
+                        dayCell.classList.add('bg-indigo-100', 'border-indigo-200');
+                    } else {
+                         dayCell.classList.add('bg-gray-50', 'hover:bg-gray-100');
+                    }
+
+                    if (date.getTime() === today.getTime()) {
+                         dayCell.classList.add('today');
+                    }
+
+                    dayCell.dataset.date = dateKey;
+                    
+                    const dayNumber = document.createElement('div');
+                    dayNumber.className = 'font-semibold text-gray-700';
+                    dayNumber.textContent = day;
+
+                    const dayMinutes = document.createElement('div');
+                    dayMinutes.className = 'text-xs text-indigo-600 font-bold mt-1';
+                    dayMinutes.textContent = minutes > 0 ? `${minutes} min` : '';
+
+                    dayCell.appendChild(dayNumber);
+                    dayCell.appendChild(dayMinutes);
+
+                    dayCell.addEventListener('click', () => showModal(dateKey));
+                    calendarGrid.appendChild(dayCell);
+                }
+            }
+            
+            function updateDashboard(year, month) {
+                const dates = Object.keys(meditationData)
+                    .filter(key => key.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`))
+                    .sort();
+                
+                const totalMinutes = dates.reduce((sum, key) => sum + (meditationData[key] || 0), 0);
+                const daysWithMeditation = dates.filter(key => meditationData[key] > 0).length;
+                const dailyAverage = daysWithMeditation > 0 ? (totalMinutes / daysWithMeditation).toFixed(1) : '0.0';
+
+                totalMinutesEl.textContent = totalMinutes;
+                dailyAverageEl.textContent = dailyAverage;
+
+                currentStreakEl.textContent = `${calculateStreak()} days`;
+                
+                const totalMinutes2525 = calculate25to25Total(year, month);
+                totalMinutes2525El.textContent = totalMinutes2525;
+            }
+
+             function calculateStreak() {
+                let streak = 0;
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                const allDates = Object.keys(meditationData)
+                    .filter(key => meditationData[key] > 0)
+                    .sort((a,b) => new Date(b) - new Date(a));
+
+                if (allDates.length === 0) return 0;
+
+                const todayKey = today.toISOString().split('T')[0];
+                const yesterday = new Date(today);
+                yesterday.setDate(today.getDate() - 1);
+                const yesterdayKey = yesterday.toISOString().split('T')[0];
+
+                let startingDate;
+                if(meditationData[todayKey] > 0) {
+                    startingDate = today;
+                    streak = 1;
+                } else if (meditationData[yesterdayKey] > 0) {
+                    startingDate = yesterday;
+                    streak = 1;
+                } else {
+                    return 0;
+                }
+                
+                let foundDates = new Set(allDates);
+                for (let i = 1; i < allDates.length + 1; i++) {
+                     let prevDay = new Date(startingDate);
+                     prevDay.setDate(startingDate.getDate() - i);
+                     let prevDayKey = prevDay.toISOString().split('T')[0];
+                     if(foundDates.has(prevDayKey)){
+                         streak++;
+                     } else {
+                         break;
+                     }
+                }
+
+                return streak;
+            }
+
+            function calculate25to25Total(year, month) {
+                const endDate = new Date(year, month, 25);
+                const startDate = new Date(endDate);
+                startDate.setMonth(startDate.getMonth() - 1);
+
+                let total = 0;
+                let currentDate = new Date(startDate);
+
+                while (currentDate <= endDate) {
+                    const dateKey = currentDate.toISOString().split('T')[0];
+                    if (meditationData[dateKey]) {
+                        total += meditationData[dateKey];
+                    }
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+                return total;
+            }
+
+            function renderChart(year, month) {
+                const ctx = document.getElementById('meditation-chart').getContext('2d');
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const labels = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+                const data = labels.map(day => {
+                    const dateKey = new Date(year, month, day).toISOString().split('T')[0];
+                    return meditationData[dateKey] || 0;
+                });
+
+                if (chartInstance) {
+                    chartInstance.destroy();
+                }
+
+                chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Minutes Meditated',
+                            data: data,
+                            backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                            borderColor: 'rgba(99, 102, 241, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Minutes'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: `Day of ${monthNames[month]}`
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        const day = context[0].label;
+                                        return `${monthNames[month]} ${day}, ${year}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function showModal(dateKey) {
+                selectedDateKey = dateKey;
+                const date = new Date(dateKey);
+                modalTitle.textContent = `Log for ${monthNames[date.getUTCMonth()]} ${date.getUTCDate()}`;
+                minutesInput.value = meditationData[dateKey] || '';
+                modal.classList.remove('hidden');
+                minutesInput.focus();
+            }
+
+            function hideModal() {
+                modal.classList.add('hidden');
+            }
+
+            function handleSave() {
+                const minutes = parseInt(minutesInput.value);
+                if (!isNaN(minutes) && minutes >= 0) {
+                    meditationData[selectedDateKey] = minutes;
+                } else if (minutesInput.value === '') {
+                    delete meditationData[selectedDateKey];
+                }
+                saveData();
+                render();
+                hideModal();
+            }
+
+            function saveData() {
+                localStorage.setItem('meditationData', JSON.stringify(meditationData));
+            }
+
+            function loadData() {
+                const data = localStorage.getItem('meditationData');
+                if (data) {
+                    meditationData = JSON.parse(data);
+                }
+            }
+
+            initialize();
+        });
+    </script>
+</body>
+</html>
